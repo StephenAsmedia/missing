@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>懷念</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 第一個畫面 -->
+  <section id="home" class="home">
+    <div class="home-bg" aria-hidden="true"></div>
+    <div class="home-veil" aria-hidden="true"></div>
+
+    <main class="home-content">
+      <h1 class="title">懷念</h1>
+      <figure class="portrait">
+        <img src="picture/DSC04803-1.jpg" alt="紀念照片" decoding="async">
+      </figure>
+      <button id="startBtn" class="start-btn" type="button">開　始</button>
+      <p id="homeHint" class="hint" hidden></p>
+    </main>
+  </section>
+
+  <!-- 播放畫面 -->
+  <section id="player" class="player" hidden>
+    <img id="layerA" class="layer" alt="" decoding="async">
+    <img id="layerB" class="layer" alt="" decoding="async">
+    <button id="endBtn" class="end-btn" type="button" hidden>結束</button>
+  </section>
+
+  <audio id="bgm" preload="auto"></audio>
+
+  <script src="photos.js"></script>
+  <script src="music.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
