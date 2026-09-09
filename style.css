@@ -1,241 +1,39 @@
-/* ============================================================
-   懷念 — 樣式
-   色系：米白 / 淡金 / 淺褐；莊嚴、柔和、素雅
-   ============================================================ */
-
-:root {
-  --cream: #f6efe0;
-  --cream-dim: #d9cdb3;
-  --gold: #d4b46a;
-  --gold-soft: #e9d8a6;
-  --gold-deep: #a88a3c;
-  --brown: #4a3a26;
-  --brown-deep: #1c150e;
-  --player-bg: #0f0b07;
-  --font-serif: "Noto Serif TC", "Songti TC", "STSong", "PMingLiU", "MingLiU",
-                "Source Han Serif TC", "Times New Roman", serif;
-  --font-sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei",
-               "Helvetica Neue", Arial, sans-serif;
-}
-
+:root { color-scheme: light; font-family: "Noto Serif TC", "PMingLiU", "Songti TC", serif; color: #fff6e4; background: #30291f; }
 * { box-sizing: border-box; }
-
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  background: var(--brown-deep);
-  color: var(--cream);
-  font-family: var(--font-serif);
-  -webkit-font-smoothing: antialiased;
-  overflow: hidden;
-}
-
+body { margin: 0; }
 [hidden] { display: none !important; }
+button { font: inherit; cursor: pointer; touch-action: manipulation; }
+button:focus-visible { outline: 3px solid #fff6da; outline-offset: 6px; }
+.home { min-height: 100vh; min-height: 100svh; position: relative; display: grid; place-items: center; overflow: hidden; padding: 30px 24px; background: radial-gradient(ellipse at 50% 28%, #bba06b66, transparent 65%), radial-gradient(ellipse at 20% 100%, #a8997855, transparent 60%), linear-gradient(135deg, #514838, #817052, #302b23); }
+.sacred-background, .veil { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sacred-background { object-fit: cover; object-position: center; opacity: .65; }
+.veil { background: linear-gradient(90deg, #241f244a, #32271f66, #241f244a), linear-gradient(180deg, #35282025, #31251c66 50%, #201c18e6); }
+.memorial { position: relative; text-align: center; width: min(100%, 510px); }
+.eyebrow { font-size: 13px; letter-spacing: .6em; margin: 0 0 24px; color: #eee0bb; }
+.portrait-frame { width: fit-content; max-width: 100%; padding: 7px; margin: auto; border: 1px solid #d4bd84; background: #f5ebd414; box-shadow: 0 12px 45px #140e1b55, 0 0 0 5px #e8d8ad14; }
+.portrait-frame img { display: block; max-width: min(60vw, 290px); height: 33vh; height: 33svh; max-height: 350px; object-fit: contain; }
+#portrait-fallback { padding: 60px 36px; letter-spacing: .3em; }
+h1 { margin: 24px 0 8px; padding-left: .3em; font-size: clamp(40px, 5.8vw, 64px); font-weight: 400; letter-spacing: .3em; text-shadow: 0 2px 18px #1b161b80; }
+.divider { display: flex; justify-content: center; align-items: center; gap: 16px; color: #d2bb87; margin: 10px 0 22px; }
+.divider::before, .divider::after { content: ""; width: 48px; height: 1px; background: #d2bb8766; }
+.start-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+#start, #start-silent { min-height: 58px; min-width: 180px; padding: 12px 28px; border: 1px solid #e0cca3; border-radius: 3px; color: #433729; background: #f0e4ca; font-size: 24px; letter-spacing: .2em; box-shadow: 0 4px 20px #19161333; }
+#start span { margin-left: 14px; font-size: 17px; }
+#start:hover, #start-silent:hover { background: #fcf3df; }
+#start:disabled, #start-silent:disabled { opacity: .55; cursor: default; }
+.hint { margin: 20px 0 0; font-size: 13px; letter-spacing: .14em; color: #e2d7c4; }
+.status { font-family: sans-serif; max-width: 30em; font-size: 14px; line-height: 1.7; margin: 12px auto 0; }
+body.playing { overflow: hidden; }
+.player { position: fixed; inset: 0; z-index: 10; width: 100%; height: 100%; background: #100e0c; overflow: hidden; outline: none; }
+.player:fullscreen { width: 100vw; height: 100vh; }
+.player:-webkit-full-screen { width: 100vw; height: 100vh; }
+.slide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 1500ms linear; }
+.slide.visible { opacity: 1; }
+.controls { position: absolute; top: max(20px, env(safe-area-inset-top)); right: max(20px, env(safe-area-inset-right)); z-index: 3; }
+#stop, .audio-retry { border: 1px solid #cdbb9777; border-radius: 5px; background: #1c1915da; color: #f5e9cd; padding: 12px 22px; min-height: 46px; font-family: sans-serif; font-size: 17px; }
+.audio-retry { position: absolute; z-index: 4; bottom: max(50px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); }
+.play-status { position: absolute; bottom: 12px; width: 100%; padding: 0 18px; text-align: center; font: 14px/1.5 sans-serif; color: #f0e5d1; text-shadow: 0 1px 5px black; }
+@media (max-height: 540px) and (orientation: landscape) { .home { padding: 16px 24px; } .memorial { display: grid; grid-template-columns: 1fr 1fr; align-items: center; column-gap: 36px; width: min(760px, 100%); } .portrait-frame { grid-row: 1 / 7; } .portrait-frame img { height: 72vh; max-width: 35vw; } .eyebrow { margin: 0; } h1 { margin: 6px 0; } .divider { margin: 2px 0 10px; } .hint { margin-top: 12px; } }
 
-/* ------------------------------------------------------------
-   第一個畫面
-   ------------------------------------------------------------ */
-.home {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-/* 西方三聖背景：鋪滿全畫面（原圖較小，稍微柔化避免鋸齒） */
-.home-bg {
-  position: absolute;
-  inset: -3%;
-  background: var(--brown-deep) url("img/west3saints.jpg") center / cover no-repeat;
-  filter: blur(2px) saturate(0.9);
-  transform: scale(1.02);
-}
-
-/* 若背景圖無法載入，仍有柔和金光放射與雲霧漸層感 */
-.home-veil {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 70% 60% at 50% 42%,
-      rgba(233, 216, 166, 0.20) 0%,
-      rgba(212, 180, 106, 0.10) 35%,
-      rgba(28, 21, 14, 0.45) 75%,
-      rgba(28, 21, 14, 0.80) 100%),
-    linear-gradient(180deg,
-      rgba(28, 21, 14, 0.55) 0%,
-      rgba(28, 21, 14, 0.25) 30%,
-      rgba(28, 21, 14, 0.25) 60%,
-      rgba(28, 21, 14, 0.70) 100%);
-}
-
-.home-content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(14px, 2.6vh, 30px);
-  width: 100%;
-  height: 100%;
-  padding: max(16px, env(safe-area-inset-top)) 20px max(16px, env(safe-area-inset-bottom));
-  text-align: center;
-}
-
-.title {
-  margin: 0;
-  font-weight: 500;
-  font-size: clamp(2.4rem, 7vmin, 5rem);
-  letter-spacing: 0.35em;
-  text-indent: 0.35em; /* 抵銷最後一字後方的字距，讓標題置中 */
-  color: var(--cream);
-  text-shadow:
-    0 0 24px rgba(233, 216, 166, 0.35),
-    0 2px 12px rgba(0, 0, 0, 0.55);
-}
-
-/* 主照片：細緻淡金色邊框與柔和陰影 */
-.portrait {
-  margin: 0;
-  padding: 6px;
-  background: linear-gradient(160deg, var(--gold-soft), var(--gold-deep) 55%, var(--gold-soft));
-  border-radius: 6px;
-  box-shadow:
-    0 0 0 1px rgba(255, 245, 210, 0.35) inset,
-    0 18px 50px rgba(0, 0, 0, 0.55),
-    0 0 60px rgba(212, 180, 106, 0.18);
-  line-height: 0;
-}
-
-.portrait img {
-  display: block;
-  max-width: min(78vw, 560px);
-  max-height: 52vh;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 250, 235, 0.5);
-  background: var(--brown-deep);
-}
-
-.start-btn {
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-  font-family: var(--font-serif);
-  font-size: clamp(1.35rem, 3.4vmin, 2.1rem);
-  letter-spacing: 0.15em;
-  padding: 0.7em 2.2em;
-  min-width: 11em;
-  min-height: 64px;
-  color: var(--brown);
-  background: linear-gradient(180deg, #f3e6bf 0%, var(--gold) 60%, #c9a85a 100%);
-  border: 1px solid rgba(255, 250, 230, 0.7);
-  border-radius: 999px;
-  box-shadow:
-    0 6px 20px rgba(0, 0, 0, 0.45),
-    0 0 30px rgba(212, 180, 106, 0.25);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-.start-btn:hover,
-.start-btn:focus-visible {
-  filter: brightness(1.06);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5), 0 0 40px rgba(233, 216, 166, 0.35);
-  outline: none;
-}
-.start-btn:active { transform: translateY(1px) scale(0.99); }
-
-.hint {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: clamp(0.85rem, 1.8vmin, 1.05rem);
-  color: var(--cream-dim);
-  opacity: 0.85;
-}
-
-/* 橫向且高度很矮的裝置（手機橫拿）：照片與按鈕並排 */
-@media (orientation: landscape) and (max-height: 480px) {
-  .home-content { flex-direction: row; flex-wrap: wrap; gap: 16px 36px; }
-  .title { width: 100%; font-size: clamp(1.8rem, 6vmin, 3rem); }
-  .portrait img { max-height: 56vh; max-width: 42vw; }
-}
-
-/* ------------------------------------------------------------
-   播放畫面
-   ------------------------------------------------------------ */
-.player {
-  position: fixed;
-  inset: 0;
-  background: var(--player-bg);
-  overflow: hidden;
-  cursor: none;
-  z-index: 10;
-}
-
-.player.show-cursor { cursor: default; }
-
-.layer {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center;
-  opacity: 0;
-  transition: opacity 1.5s ease-in-out;
-  will-change: opacity, transform;
-  transform-origin: center center;
-  -webkit-user-select: none;
-  user-select: none;
-  pointer-events: none;
-}
-
-.layer.visible { opacity: 1; }
-
-/* 非常輕微、緩慢的放大（Ken Burns），時間略長於停留+淡出，確保平順 */
-.layer.kenburns {
-  animation: kenburns 9s linear forwards;
-}
-
-@keyframes kenburns {
-  from { transform: scale(1.0); }
-  to   { transform: scale(1.045); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .layer.kenburns { animation: none; }
-}
-
-/* 「結束」按鈕：點一下畫面才顯示，幾秒後自動隱藏 */
-.end-btn {
-  position: absolute;
-  top: max(14px, env(safe-area-inset-top));
-  right: max(14px, env(safe-area-inset-right));
-  z-index: 20;
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 1rem;
-  letter-spacing: 0.1em;
-  padding: 0.55em 1.3em;
-  min-height: 44px;
-  color: var(--cream);
-  background: rgba(30, 22, 14, 0.62);
-  border: 1px solid rgba(233, 216, 166, 0.55);
-  border-radius: 999px;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  opacity: 0;
-  transition: opacity 0.35s ease;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-.end-btn.visible { opacity: 1; }
+#start-silent { font-size: 20px; letter-spacing: .06em; background: #30291fb3; color: #f0e4ca; }
+#start-silent:hover { background: #514838; }

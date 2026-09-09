@@ -1,307 +1,216 @@
-/* ============================================================
-   懷念 — 播放邏輯
-   純 JavaScript，無任何外部連線；可用 file:// 直接開啟
-   ============================================================ */
-(function () {
-  "use strict";
+'use strict';
+(() => {
+  const HOLD = 6000;
+  const FADE = 1500;
+  const home = document.getElementById('home');
+  const player = document.getElementById('player');
+  const startButton = document.getElementById('start');
+  const silentButton = document.getElementById('start-silent');
+  let musicEnabled = true;
+  const stopButton = document.getElementById('stop');
+  const controls = document.getElementById('controls');
+  const audio = document.getElementById('audio');
+  const retry = document.getElementById('audio-retry');
+  const status = document.getElementById('play-status');
+  const homeStatus = document.getElementById('home-status');
+  const slides = [...document.querySelectorAll('.slide')];
+  const photos = typeof PHOTOS !== 'undefined' ? PHOTOS : [];
+  const music = typeof MUSIC !== 'undefined' ? MUSIC : [];
+  let active = false, generation = 0, photoIndex = -1, slot = 0, track = 0;
+  let timer, controlsTimer, fadeFrame, wakeLock;
+  let enteredFullscreen = false, pendingPhoto;
+  let context, gain, source;
+  const url = (folder, name) => folder + '/' + encodeURIComponent(name);
+  const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
 
-  // ---------- 可調整的參數 ----------
-  var SLIDE_MS = 6000;   // 每張停留時間
-  var FADE_MS = 1500;    // 交叉淡入淡出時間（需與 style.css 的 transition 一致）
-  var MUSIC_FADE_MS = 2000;  // 音樂淡入時間
-  var END_BTN_MS = 4000;     // 「結束」按鈕顯示秒數
-  var PHOTO_DIR = "picture/";
-  var MUSIC_DIR = "music/";
+  document.getElementById('sacred-background').addEventListener('error', event => { event.target.hidden = true; });
+  const portrait = document.getElementById('portrait');
+  function portraitError() { portrait.hidden = true; document.getElementById('portrait-fallback').hidden = false; }
+  portrait.addEventListener('error', portraitError);
+  if (portrait.complete && !portrait.naturalWidth) portraitError();
+  if (!photos.length) { startButton.disabled = true; silentButton.disabled = true; homeStatus.textContent = '尚未加入相片，請先執行 resize_photos.py。'; }
+  audio.loop = music.length === 1;
+  if (music.length) audio.src = url('music', music[0]);
 
-  // ---------- DOM ----------
-  var home = document.getElementById("home");
-  var player = document.getElementById("player");
-  var startBtn = document.getElementById("startBtn");
-  var endBtn = document.getElementById("endBtn");
-  var homeHint = document.getElementById("homeHint");
-  var layers = [document.getElementById("layerA"), document.getElementById("layerB")];
-  var bgm = document.getElementById("bgm");
-
-  var photos = (typeof PHOTOS !== "undefined" && PHOTOS.length) ? PHOTOS : [];
-  var tracks = (typeof MUSIC !== "undefined" && MUSIC.length) ? MUSIC : [];
-
-  // ---------- 狀態 ----------
-  var playing = false;
-  var usingFullscreen = false;  // 這次播放是否成功進入全螢幕
-  var photoIndex = 0;           // 下一張要顯示的相片索引
-  var activeLayer = 0;          // 目前顯示中的圖層
-  var slideTimer = null;
-  var fadeTimer = null;
-  var endBtnTimer = null;
-  var preloaded = null;         // 預先載入的下一張 Image
-  var trackIndex = 0;
-  var session = 0;              // 每次開始 +1，用來忽略上一輪殘留的非同步回呼
-
-  // ---------- 全螢幕相容處理 ----------
-  var docEl = document.documentElement;
-  var fsRequest = docEl.requestFullscreen || docEl.webkitRequestFullscreen ||
-                  docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
-  var fsExit = document.exitFullscreen || document.webkitExitFullscreen ||
-               document.mozCancelFullScreen || document.msExitFullscreen;
-
-  function fsElement() {
-    return document.fullscreenElement || document.webkitFullscreenElement ||
-           document.mozFullScreenElement || document.msFullscreenElement || null;
+  function loadPhoto(index) {
+    return new Promise(resolve => {
+      const image = new Image();
+      let settled = false;
+      const timeout = setTimeout(() => finish(false), 15000);
+      function finish(ok) {
+        if (settled) return;
+        settled = true; clearTimeout(timeout);
+        image.onload = image.onerror = null;
+        resolve(ok ? { image, index } : null);
+      }
+      image.onload = async () => {
+        try { if (image.decode) await image.decode(); } catch (_) {}
+        finish(image.naturalWidth > 0);
+      };
+      image.onerror = () => finish(false);
+      image.src = url('picture', photos[index]);
+    });
   }
-
-  function fsSupported() {
-    var enabled = document.fullscreenEnabled || document.webkitFullscreenEnabled ||
-                  document.mozFullScreenEnabled || document.msFullscreenEnabled;
-    return !!fsRequest && enabled !== false;
+  async function findPhoto(index, token) {
+    for (let offset = 0; offset < photos.length && active && generation === token; offset++) {
+      const result = await loadPhoto((index + offset) % photos.length);
+      if (result) return result;
+    }
+    return null;
   }
-
-  function requestFullscreen() {
-    // 回傳 Promise；不支援時 reject
-    return new Promise(function (resolve, reject) {
-      if (!fsSupported()) { reject(new Error("fullscreen not supported")); return; }
+  async function showNext(token, first = false) {
+    const result = await pendingPhoto;
+    if (!active || generation !== token) return;
+    if (!result) { stop('相片無法讀取，請確認 picture 資料夾與 photos.js。'); return; }
+    const previous = slides[slot];
+    slot = first ? 0 : 1 - slot;
+    const next = slides[slot];
+    next.src = result.image.src;
+    next.alt = '追思相片 ' + (result.index + 1);
+    next.style.transition = first ? 'none' : '';
+    void next.offsetWidth;
+    if (!first) { previous.style.transition = ''; previous.classList.remove('visible'); }
+    next.classList.add('visible');
+    photoIndex = result.index;
+    player.dataset.photoIndex = String(photoIndex);
+    status.textContent = !musicEnabled || music.length ? '' : '未加入音樂，正在播放相片。';
+    pendingPhoto = findPhoto((photoIndex + 1) % photos.length, token);
+    // 每張完全顯示 6 秒，再用 1.5 秒交叉淡化；第一次無需等待淡化。
+    timer = setTimeout(() => showNext(token), HOLD + (first ? 0 : FADE));
+  }
+  function showControls() {
+    if (!active) return;
+    controls.hidden = false;
+    clearTimeout(controlsTimer);
+    controlsTimer = setTimeout(() => {
+      controls.hidden = true;
+      if (document.activeElement === stopButton) player.focus({ preventScroll: true });
+    }, 4000);
+  }
+  function setupAudio() {
+    if (context || source || window.location?.protocol === 'file:') return;
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (AudioContext) {
+        context = new AudioContext();
+        gain = context.createGain();
+        source = context.createMediaElementSource(audio);
+        source.connect(gain); gain.connect(context.destination);
+      }
+    } catch (_) { context = null; gain = null; }
+  }
+  function fadeIn() {
+    cancelAnimationFrame(fadeFrame);
+    if (gain && context && context.state === 'running') {
+      const now = context.currentTime;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(1, now + 2);
+      audio.volume = 1;
+    } else {
+      const began = performance.now();
+      const step = now => {
+        if (!active) return;
+        audio.volume = Math.min(1, (now - began) / 2000);
+        if (now - began < 2000) fadeFrame = requestAnimationFrame(step);
+      };
+      fadeFrame = requestAnimationFrame(step);
+    }
+  }
+  function playMusic(fade = false) {
+    if (!musicEnabled || !music.length || !active) return;
+    const token = generation;
+    // 在使用者的點擊處理中立即呼叫 play/resume，保留 Safari 的播放授權。
+    if (fade) {
+      setupAudio();
+      if (gain) gain.gain.value = 0;
+      else audio.volume = 0;
+    }
+    const resumed = context ? context.resume().catch(() => {}) : Promise.resolve();
+    const playing = audio.play();
+    Promise.all([resumed, playing]).then(() => {
+      if (!active || generation !== token) return;
+      retry.hidden = true;
+      if (fade) fadeIn();
+    }).catch(() => { if (active && generation === token) retry.hidden = false; });
+  }
+  async function requestWakeLock(token) {
+    try {
+      if (navigator.wakeLock) {
+        const lock = await navigator.wakeLock.request('screen');
+        if (!active || generation !== token) await lock.release();
+        else wakeLock = lock;
+      }
+    } catch (_) {}
+  }
+  function start(withMusic = true) {
+    if (active || !photos.length) return;
+    musicEnabled = withMusic;
+    audio.muted = !musicEnabled;
+    retry.hidden = true;
+    active = true; const token = ++generation;
+    enteredFullscreen = false; photoIndex = -1; slot = 0;
+    homeStatus.textContent = ''; status.textContent = '正在準備相片…';
+    home.hidden = true; player.hidden = false; document.body.classList.add('playing');
+    player.focus({ preventScroll: true });
+    track = 0;
+    if (musicEnabled && music.length) { audio.src = url('music', music[0]); playMusic(true); }
+    const request = player.requestFullscreen || player.webkitRequestFullscreen;
+    if (request) {
       try {
-        var p = fsRequest.call(docEl, { navigationUI: "hide" });
-        if (p && typeof p.then === "function") {
-          p.then(resolve, reject);
-        } else {
-          // 舊版 webkit 不回傳 Promise：稍後檢查是否真的進入全螢幕
-          setTimeout(function () { fsElement() ? resolve() : reject(new Error("no fullscreen")); }, 300);
-        }
-      } catch (e) { reject(e); }
-    });
-  }
-
-  function exitFullscreen() {
-    if (fsElement() && fsExit) {
-      try { var p = fsExit.call(document); if (p && p.catch) { p.catch(function () {}); } } catch (e) {}
+        const requested = request.call(player);
+        if (requested && requested.catch) requested.catch(() => { if (active && generation === token) showControls(); });
+      } catch (_) { showControls(); }
     }
+    pendingPhoto = findPhoto(0, token);
+    showNext(token, true); showControls(); requestWakeLock(token);
   }
-
-  // ---------- 相片 ----------
-  function photoUrl(name) { return PHOTO_DIR + encodeURIComponent(name); }
-
-  function preload(index) {
-    if (!photos.length) { return; }
-    var img = new Image();
-    img.decoding = "async";
-    img.src = photoUrl(photos[index % photos.length]);
-    preloaded = img;
-  }
-
-  function restartKenBurns(el) {
-    el.classList.remove("kenburns");
-    void el.offsetWidth; // 強制重排，讓動畫重新開始
-    el.classList.add("kenburns");
-  }
-
-  function showNext() {
-    if (!playing || !photos.length) { return; }
-    var mySession = session;
-    var name = photos[photoIndex % photos.length];
-    var nextLayer = 1 - activeLayer;
-    var el = layers[nextLayer];
-    var src = photoUrl(name);
-
-    // 準備下一張到隱藏的圖層上；等它解碼完成再淡入，避免閃白
-    el.src = src;
-    var ready = (el.decode ? el.decode().catch(function () {}) : Promise.resolve());
-    ready.then(function () {
-      if (!playing || mySession !== session) { return; }
-      restartKenBurns(el);
-      el.classList.add("visible");
-      layers[activeLayer].classList.remove("visible");
-      activeLayer = nextLayer;
-
-      // 淡出結束後清掉舊圖層的 Ken Burns，避免下次瞬間跳動
-      clearTimeout(fadeTimer);
-      fadeTimer = setTimeout(function () {
-        if (mySession !== session) { return; }
-        layers[1 - activeLayer].classList.remove("kenburns");
-      }, FADE_MS + 50);
-
-      photoIndex = (photoIndex + 1) % photos.length;
-      preload(photoIndex);
-
-      clearTimeout(slideTimer);
-      slideTimer = setTimeout(showNext, SLIDE_MS);
-    });
-  }
-
-  function startSlides() {
-    photoIndex = 0;
-    activeLayer = 1;   // 讓第一張出現在 layerA
-    layers.forEach(function (l) { l.classList.remove("visible", "kenburns"); l.removeAttribute("src"); });
-    showNext();
-  }
-
-  function stopSlides() {
-    clearTimeout(slideTimer); slideTimer = null;
-    clearTimeout(fadeTimer); fadeTimer = null;
-    preloaded = null;
-    layers.forEach(function (l) {
-      l.classList.remove("visible", "kenburns");
-      l.removeAttribute("src");
-    });
-  }
-
-  // ---------- 音樂 ----------
-  var volumeTimer = null;
-
-  function fadeInMusic() {
-    clearInterval(volumeTimer);
-    var steps = 20, i = 0;
-    try { bgm.volume = 0; } catch (e) {}
-    volumeTimer = setInterval(function () {
-      i++;
-      try { bgm.volume = Math.min(1, i / steps); } catch (e) {}
-      if (i >= steps) { clearInterval(volumeTimer); volumeTimer = null; }
-    }, MUSIC_FADE_MS / steps);
-  }
-
-  function loadTrack(index) {
-    if (!tracks.length) { return; }
-    trackIndex = index % tracks.length;
-    bgm.src = MUSIC_DIR + encodeURIComponent(tracks[trackIndex]);
-    bgm.load();
-  }
-
-  function startMusic() {
-    if (!tracks.length) { return; }
-    loadTrack(0);
-    fadeInMusic();
-    var p = bgm.play();
-    if (p && p.catch) { p.catch(function () { /* 瀏覽器阻擋自動播放時靜音繼續播相片 */ }); }
-  }
-
-  function stopMusic() {
-    clearInterval(volumeTimer); volumeTimer = null;
-    try { bgm.pause(); bgm.currentTime = 0; } catch (e) {}
-    bgm.removeAttribute("src");
-    try { bgm.load(); } catch (e) {}
-  }
-
-  bgm.addEventListener("ended", function () {
-    if (!playing) { return; }
-    loadTrack(trackIndex + 1);      // 全部播完後 % 回到第一首
-    try { bgm.volume = 1; } catch (e) {}
-    var p = bgm.play();
-    if (p && p.catch) { p.catch(function () {}); }
-  });
-
-  // ---------- 結束按鈕（手機／平板） ----------
-  function showEndBtn() {
-    if (!playing) { return; }
-    endBtn.hidden = false;
-    player.classList.add("show-cursor");
-    // 下一個 frame 再加 class，讓淡入動畫生效
-    requestAnimationFrame(function () { endBtn.classList.add("visible"); });
-    clearTimeout(endBtnTimer);
-    endBtnTimer = setTimeout(hideEndBtn, END_BTN_MS);
-  }
-
-  function hideEndBtn() {
-    clearTimeout(endBtnTimer); endBtnTimer = null;
-    endBtn.classList.remove("visible");
-    player.classList.remove("show-cursor");
-    setTimeout(function () { if (!endBtn.classList.contains("visible")) { endBtn.hidden = true; } }, 400);
-  }
-
-  // ---------- 開始／停止 ----------
-  function enterPlayer() {
-    playing = true;
-    session++;
-    home.hidden = true;
-    player.hidden = false;
-    hideEndBtn();
-    startMusic();
-    startSlides();
-  }
-
-  function start() {
-    if (playing) { return; }
-    if (!photos.length) {
-      homeHint.textContent = "找不到相片：請先執行 resize_photos.py 產生 picture/ 與 photos.js";
-      homeHint.hidden = false;
-      return;
+  function stop(message = '') {
+    if (!active) return;
+    active = false; ++generation;
+    clearTimeout(timer); clearTimeout(controlsTimer); cancelAnimationFrame(fadeFrame);
+    audio.pause();
+    try { audio.currentTime = 0; } catch (_) {}
+    if (context) context.suspend().catch(() => {});
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+    slides.forEach(image => { image.style.transition = 'none'; image.classList.remove('visible'); image.removeAttribute('src'); });
+    controls.hidden = true; retry.hidden = true;
+    player.hidden = true; home.hidden = false; document.body.classList.remove('playing');
+    homeStatus.textContent = message;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (fullscreenElement() && exit) {
+      try { const result = exit.call(document); if (result && result.catch) result.catch(() => {}); } catch (_) {}
     }
-    homeHint.hidden = true;
-
-    // 注意：音樂播放與全螢幕都必須在使用者點擊的同一個事件中呼叫，
-    // 否則瀏覽器會拒絕。因此先進入播放（含音樂），再嘗試全螢幕。
-    enterPlayer();
-
-    requestFullscreen().then(function () {
-      usingFullscreen = true;
-    }, function () {
-      // 不支援全螢幕（例如 iPhone）：改以覆蓋整個視窗的方式播放
-      usingFullscreen = false;
-    });
+    enteredFullscreen = false;
+    (musicEnabled ? startButton : silentButton).focus({ preventScroll: true });
   }
-
-  function stop() {
-    if (!playing) { return; }
-    playing = false;
-    session++;
-    stopSlides();
-    stopMusic();
-    hideEndBtn();
-    player.hidden = true;
-    home.hidden = false;
-    exitFullscreen();
-    usingFullscreen = false;
-    // 把焦點放回按鈕，方便用鍵盤／遙控器再次開始
-    try { startBtn.focus({ preventScroll: true }); } catch (e) {}
+  function fullscreenChanged() {
+    if (!active) return;
+    if (fullscreenElement()) enteredFullscreen = true;
+    else if (enteredFullscreen) stop();
   }
-
-  // ---------- 事件 ----------
-  startBtn.addEventListener("click", start);
-
-  endBtn.addEventListener("click", function (e) {
-    e.stopPropagation();
-    stop();
+  document.addEventListener('fullscreenchange', fullscreenChanged);
+  document.addEventListener('webkitfullscreenchange', fullscreenChanged);
+  document.addEventListener('keydown', event => {
+    if (!active) return;
+    if (event.key === 'Escape') stop();
+    else if (event.key === 'Tab') showControls();
   });
-
-  // 退出全螢幕（Esc、手勢、系統按鈕…）→ 一律停止並回首頁
-  ["fullscreenchange", "webkitfullscreenchange", "mozfullscreenchange", "MSFullscreenChange"]
-    .forEach(function (evt) {
-      document.addEventListener(evt, function () {
-        if (playing && usingFullscreen && !fsElement()) { stop(); }
-      });
-    });
-
-  // 沒有進入全螢幕時（例如全螢幕被拒絕），Esc 也要能停止
-  document.addEventListener("keydown", function (e) {
-    if (!playing) { return; }
-    if (e.key === "Escape" || e.key === "Esc" || e.keyCode === 27) {
-      if (!usingFullscreen) { stop(); }
-      // 有進入全螢幕時，瀏覽器會先退出全螢幕，由 fullscreenchange 處理
-    }
+  document.addEventListener('visibilitychange', () => {
+    if (active && document.visibilityState === 'visible') requestWakeLock(generation);
   });
-
-  // 點一下（或觸控）播放畫面 → 顯示「結束」按鈕，幾秒後自動隱藏
-  player.addEventListener("pointerdown", function (e) {
-    if (e.target === endBtn) { return; }
-    if (endBtn.classList.contains("visible")) { hideEndBtn(); } else { showEndBtn(); }
+  audio.addEventListener('ended', () => {
+    if (!active || !musicEnabled || !music.length) return;
+    track = (track + 1) % music.length;
+    audio.src = url('music', music[track]); playMusic();
   });
-  // 較舊的瀏覽器沒有 pointer 事件時的備援
-  if (!("PointerEvent" in window)) {
-    player.addEventListener("click", function (e) {
-      if (e.target === endBtn) { return; }
-      if (endBtn.classList.contains("visible")) { hideEndBtn(); } else { showEndBtn(); }
-    });
-  }
-
-  // 全螢幕中滑鼠移動時暫時顯示游標與結束按鈕（電腦、電視用滑鼠時較方便）
-  var mouseTimer = null;
-  player.addEventListener("mousemove", function () {
-    if (!playing) { return; }
-    player.classList.add("show-cursor");
-    clearTimeout(mouseTimer);
-    mouseTimer = setTimeout(function () {
-      if (!endBtn.classList.contains("visible")) { player.classList.remove("show-cursor"); }
-    }, 2500);
+  audio.addEventListener('error', () => {
+    if (active && musicEnabled) { status.textContent = '音樂無法讀取，請確認 music 資料夾。'; retry.hidden = false; }
   });
-
-  // 首頁預先載入第一張相片，讓按下開始後立即顯示
-  if (photos.length) { preload(0); }
+  retry.addEventListener('click', event => { event.stopPropagation(); playMusic(true); });
+  startButton.addEventListener('click', () => start(true));
+  silentButton.addEventListener('click', () => start(false));
+  stopButton.addEventListener('click', event => { event.stopPropagation(); stop(); });
+  player.addEventListener('pointerdown', showControls);
 })();
+
